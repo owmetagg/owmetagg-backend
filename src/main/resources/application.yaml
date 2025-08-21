@@ -1,0 +1,244 @@
+# application.yml - OWMetaGG API
+spring:
+  profiles:
+    active: dev
+
+  # Database Connection Pooling (from their project - excellent!)
+  datasource:
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+      idle-timeout: 300000        # 5 minutes
+      connection-timeout: 10000   # 10 seconds
+      max-lifetime: 1200000      # 20 minutes
+
+  # JPA Configuration (optimized like theirs)
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: ${HIBERNATE_BATCH_SIZE:1000}
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+
+  # Nice console output (from their project)
+  output:
+    ansi:
+      enabled: ALWAYS
+
+# Custom Application Configuration
+app:
+  overfast:
+    api:
+      base-url: ${OVERFAST_API_URL:https://overfast-api.tekrop.fr}
+      timeout: 30s
+      retry-attempts: 3
+  cache:
+    hero-stats-ttl: ${HERO_STATS_CACHE_TTL:600}  # 10 minutes
+    rank-distribution-ttl: ${RANK_CACHE_TTL:900} # 15 minutes
+
+# RabbitMQ Configuration (for background jobs - from their pattern)
+rabbitmq:
+  queue:
+    name: ${RABBITMQ_QUEUE_NAME:owmetagg_stats_queue}
+  exchange:
+    name: ${RABBITMQ_EXCHANGE_NAME:owmetagg_stats_exchange}
+  routing:
+    key: ${RABBITMQ_ROUTING_KEY:stats.processing}
+
+# Performance Configuration (smart from their project)
+concurrency:
+  rabbitmq: ${RABBITMQ_CONCURRENCY:5}
+
+# Security & Rate Limiting (adapted from theirs)
+security:
+  rate-limit:
+    requests-per-window: ${RATE_LIMIT_REQUESTS:100}
+    window-minutes: ${RATE_LIMIT_WINDOW:1}
+    cleanup-interval-ms: ${RATE_LIMIT_CLEANUP_MS:3600000}
+
+# Server Configuration (compression from their project)
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain,text/xml,text/css,application/javascript
+    min-response-size: 1024
+
+# Logging Configuration
+logging:
+  level:
+    com:
+      owmetagg:
+        controller: INFO
+        service: INFO
+        repository: DEBUG
+    org:
+      springframework:
+        cache: DEBUG
+        retry: INFO
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: "dev"
+
+  application:
+    name: owmetagg-api-development
+
+  # H2 Database for quick development
+  datasource:
+    url: jdbc:h2:mem:owmetagg_dev
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop  # Let JPA handle schema creation for H2
+    show-sql: true
+    defer-datasource-initialization: true
+
+  # Disable Flyway for H2 development (causes circular dependency)
+  flyway:
+    enabled: false
+
+  # Enable SQL script initialization
+  sql:
+    init:
+      mode: always
+
+# CORS for frontend development
+security:
+  cors:
+    allowed-origin: http://localhost:3000
+    max-age-seconds: 3600
+
+# Development logging
+logging:
+  level:
+    com.owmetagg: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+
+---
+# Development with PostgreSQL Profile
+spring:
+  config:
+    activate:
+      on-profile: "dev-postgres"
+
+  application:
+    name: owmetagg-api-dev-postgres
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/owmetagg_dev
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate  # Use Flyway for schema management in PostgreSQL
+    show-sql: true
+
+  # Enable Flyway for PostgreSQL
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Redis for development
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+# RabbitMQ for development
+rabbitmq:
+  management:
+    api:
+      url: http://localhost:15672/api
+    username: guest
+    password: guest
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: "prod"
+
+  application:
+    name: ${SPRING_APP_NAME:owmetagg-api-production}
+
+  # Production Database
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+
+  # Enable Flyway for production
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  # Production Redis
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms
+
+# Production RabbitMQ
+rabbitmq:
+  host: ${RABBITMQ_HOST}
+  port: ${RABBITMQ_PORT:5672}
+  username: ${RABBITMQ_USERNAME}
+  password: ${RABBITMQ_PASSWORD}
+  management:
+    api:
+      url: ${RABBITMQ_API_URL}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+
+# Production Security
+security:
+  cors:
+    allowed-origin: ${CORS_ALLOWED_ORIGIN}
+    max-age-seconds: ${CORS_MAX_AGE:3600}
+
+# Production Logging
+logging:
+  level:
+    root: WARN
+    com.owmetagg: INFO
