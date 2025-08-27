@@ -1,15 +1,13 @@
 package com.owmetagg.dtos;
 
 import lombok.Data;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
+import java.time.LocalDate;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
 public class RankDistributionDTO {
-    private String rank;
-    private Long totalMatches;
-    private Long uniqueHeroes;
-    private Double avgWinRate;
+    private Integer srBracket;
+    private String bracketName;
+    private Integer playerCount;
+    private Double percentage;
+    private LocalDate snapshotDate;
 }

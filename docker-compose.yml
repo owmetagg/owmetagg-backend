@@ -1,0 +1,25 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: owmetagg-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./data/rabbitmq:/var/lib/rabbitmq
+
+  postgres:
+    image: postgres:17
+    container_name: owmetagg-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: owmetagg-database-dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: guest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  rabbitmq_data:

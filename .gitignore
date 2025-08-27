@@ -98,13 +98,18 @@ application-prod.yaml
 *.db
 *.sqlite
 *.sqlite3
+/data/
+*.sql.bak
+debug-*.sql
+test-*.sql
 
 # Environment variables
 .env
-.env.*
 .env.local
 .env.production
 .env.staging
+.env.development
+!.env.example
 
 # Security sensitive files
 *.pem
@@ -123,3 +128,15 @@ application-secrets.yaml
 .vscode/settings.json
 .idea/httpRequests/
 .idea/workspace.xml
+
+# Claude Code internal files
+.claude/
+
+# Testing files
+TESTING_GUIDE.md.bak
+test-results/
+coverage/
+
+# Docker volumes (if using local volumes)
+postgres-data/
+rabbitmq-data/

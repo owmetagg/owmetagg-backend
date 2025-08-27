@@ -1,92 +1,113 @@
-# application.yml - OWMetaGG API
 spring:
   profiles:
     active: dev
-
-  # Database Connection Pooling (from their project - excellent!)
   datasource:
     hikari:
-      maximum-pool-size: 15
-      minimum-idle: 5
-      idle-timeout: 300000        # 5 minutes
-      connection-timeout: 10000   # 10 seconds
-      max-lifetime: 1200000      # 20 minutes
-
-  # JPA Configuration (optimized like theirs)
+      # Connection Pool Sizing (optimized for high concurrency)
+      maximum-pool-size: 30        # Max connections (adjust based on PostgreSQL max_connections)
+      minimum-idle: 10              # Keep 10 connections ready
+      
+      # Connection Lifecycle
+      idle-timeout: 600000         # 10 minutes - close idle connections
+      max-lifetime: 1800000        # 30 minutes - refresh connections to avoid issues
+      connection-timeout: 20000    # 20 seconds - wait time for getting connection
+      
+      # Connection Testing
+      connection-test-query: SELECT 1
+      validation-timeout: 5000     # 5 seconds - timeout for connection validation
+      
+      # Leak Detection (helps identify connection leaks)
+      leak-detection-threshold: 60000  # 1 minute - log possible connection leaks
+      
+      # Performance Optimizations
+      auto-commit: true            # Ensure auto-commit is on (default)
+      pool-name: OwMetaggHikariCP  # Custom name for monitoring
+      
+      # Connection Properties
+      data-source-properties:
+        cachePrepStmts: true       # Enable prepared statement caching
+        prepStmtCacheSize: 250     # Number of prepared statements to cache
+        prepStmtCacheSqlLimit: 2048  # Max length of SQL to cache
+        useServerPrepStmts: true   # Use server-side prepared statements
+        rewriteBatchedStatements: true  # Optimize batch inserts
+        maintainTimeStats: false   # Disable time stats for performance
+        
+      # JMX Monitoring (enable metrics)
+      register-mbeans: true        # Register JMX MBeans for monitoring
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update            # Changed from validate for development
     properties:
       hibernate:
         jdbc:
           batch_size: ${HIBERNATE_BATCH_SIZE:1000}
         order_inserts: true
         order_updates: true
-    open-in-view: false
-
-  # Nice console output (from their project)
+    show-sql: false               # Set to true for debugging
   output:
     ansi:
       enabled: ALWAYS
 
-# Custom Application Configuration
-app:
-  overfast:
-    api:
-      base-url: ${OVERFAST_API_URL:https://overfast-api.tekrop.fr}
-      timeout: 30s
-      retry-attempts: 3
-  cache:
-    hero-stats-ttl: ${HERO_STATS_CACHE_TTL:600}  # 10 minutes
-    rank-distribution-ttl: ${RANK_CACHE_TTL:900} # 15 minutes
-
-# RabbitMQ Configuration (for background jobs - from their pattern)
+# RabbitMQ Configuration
 rabbitmq:
   queue:
-    name: ${RABBITMQ_QUEUE_NAME:owmetagg_stats_queue}
+    player-data: ${PLAYER_DATA_QUEUE:player.data.queue}
+    statistics-trigger: ${STATS_TRIGGER_QUEUE:statistics.trigger.queue}
   exchange:
-    name: ${RABBITMQ_EXCHANGE_NAME:owmetagg_stats_exchange}
+    name: ${RABBITMQ_EXCHANGE_NAME:overwatch.exchange}
   routing:
-    key: ${RABBITMQ_ROUTING_KEY:stats.processing}
+    player-data: ${PLAYER_DATA_ROUTING_KEY:player.data}
+    statistics: ${STATS_ROUTING_KEY:statistics.trigger}
+  concurrency: ${RABBITMQ_CONCURRENCY:5-10}
 
-# Performance Configuration (smart from their project)
+# OverFast API Configuration
+overfast:
+  api:
+    base-url: ${OVERFAST_API_URL:https://overfast-api.tekrop.fr}
+    rate-limit:
+      requests-per-second: ${OVERFAST_RATE_LIMIT:10}
+    timeout: ${OVERFAST_TIMEOUT_MS:30000}
+
+# Statistics Processing
+statistics:
+  calculation:
+    batch-size: ${STATS_BATCH_SIZE:1000}
+    schedule:
+      cron: ${STATS_SCHEDULE_CRON:0 0 */4 * * *}  # Every 4 hours
+
+# Performance Settings
 concurrency:
-  rabbitmq: ${RABBITMQ_CONCURRENCY:5}
+  rabbitmq: ${RABBITMQ_CONCURRENCY:5-10}
+  statistics: ${STATISTICS_THREADS:3}
 
-# Security & Rate Limiting (adapted from theirs)
+# Rate Limiting
 security:
   rate-limit:
     requests-per-window: ${RATE_LIMIT_REQUESTS:100}
     window-minutes: ${RATE_LIMIT_WINDOW:1}
     cleanup-interval-ms: ${RATE_LIMIT_CLEANUP_MS:3600000}
 
-# Server Configuration (compression from their project)
-server:
-  port: ${SERVER_PORT:8080}
-  compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/plain,text/xml,text/css,application/javascript
-    min-response-size: 1024
-
-# Logging Configuration
+# Logging
 logging:
   level:
     com:
-      owmetagg:
-        controller: INFO
-        service: INFO
-        repository: DEBUG
+      yourname:
+        overwatchstats:
+          service:
+            OverFastService: INFO
+            RabbitService: INFO
+            PlayerProcessingService: INFO
+            StatisticsCalculationService: INFO
     org:
       springframework:
-        cache: DEBUG
-        retry: INFO
+        amqp: INFO
 
-# Actuator
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics,prometheus
+# Server Settings
+server:
+  compression:
+    enabled: true
+    mime-types: application/json,text/plain
+    min-response-size: 1024
 
 ---
 # Development Profile
@@ -94,87 +115,23 @@ spring:
   config:
     activate:
       on-profile: "dev"
-
   application:
-    name: owmetagg-api-development
-
-  # H2 Database for quick development
+    name: overwatch-stats-backend-dev
   datasource:
-    url: jdbc:h2:mem:owmetagg_dev
-    driverClassName: org.h2.Driver
-    username: sa
-    password: password
-
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-
-  jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
-    hibernate:
-      ddl-auto: create-drop  # Let JPA handle schema creation for H2
-    show-sql: true
-    defer-datasource-initialization: true
-
-  # Disable Flyway for H2 development (causes circular dependency)
-  flyway:
-    enabled: false
-
-  # Enable SQL script initialization
-  sql:
-    init:
-      mode: always
-
-# CORS for frontend development
-security:
-  cors:
-    allowed-origin: http://localhost:3000
-    max-age-seconds: 3600
-
-# Development logging
-logging:
-  level:
-    com.owmetagg: DEBUG
-    org.springframework.web: DEBUG
-    org.hibernate.SQL: DEBUG
-
----
-# Development with PostgreSQL Profile
-spring:
-  config:
-    activate:
-      on-profile: "dev-postgres"
-
-  application:
-    name: owmetagg-api-dev-postgres
-
-  datasource:
-    url: jdbc:postgresql://localhost:5432/owmetagg_dev
+    url: jdbc:postgresql://localhost:5433/owmetagg-database-dev
     username: postgres
-    password: password
-    driver-class-name: org.postgresql.Driver
-
+    password: guest
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true              # Show SQL in development
     hibernate:
-      ddl-auto: validate  # Use Flyway for schema management in PostgreSQL
-    show-sql: true
+      ddl-auto: update          # Auto-create tables in dev
 
-  # Enable Flyway for PostgreSQL
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
-
-  # Redis for development
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      timeout: 2000ms
-
-# RabbitMQ for development
+# RabbitMQ Management
 rabbitmq:
   management:
     api:
@@ -182,63 +139,66 @@ rabbitmq:
     username: guest
     password: guest
 
+# CORS for frontend development
+security:
+  cors:
+    allowed-origin: http://localhost:3000
+    max-age-seconds: 3600
+
+# Development-specific settings
+overfast:
+  api:
+    rate-limit:
+      requests-per-second: 5    # Be nice to OverFast API in dev
+
 ---
 # Production Profile
 spring:
   config:
     activate:
       on-profile: "prod"
-
   application:
-    name: ${SPRING_APP_NAME:owmetagg-api-production}
-
-  # Production Database
+    name: ${SPRING_APP_NAME:overwatch-stats-backend-prod}
   datasource:
     url: ${DATABASE_URL}
     username: ${DATABASE_USERNAME}
     password: ${DATABASE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-
+    hikari:
+      # Production overrides for higher scale
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:50}  # Higher for production
+      minimum-idle: ${HIKARI_MIN_IDLE:20}
+      # PostgreSQL specific optimizations
+      data-source-properties:
+        # TCP keep-alive to prevent connection drops
+        tcpKeepAlive: true
+        # Statement timeout to prevent long-running queries
+        statementTimeout: ${DB_STATEMENT_TIMEOUT:30000}  # 30 seconds default
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
-    hibernate:
-      ddl-auto: validate
     show-sql: false
+    hibernate:
+      ddl-auto: validate        # Don't auto-modify prod schema
 
-  # Enable Flyway for production
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: false
-
-  # Production Redis
-  data:
-    redis:
-      host: ${REDIS_HOST}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD}
-      timeout: 2000ms
-
-# Production RabbitMQ
+# Production RabbitMQ Management
 rabbitmq:
-  host: ${RABBITMQ_HOST}
-  port: ${RABBITMQ_PORT:5672}
-  username: ${RABBITMQ_USERNAME}
-  password: ${RABBITMQ_PASSWORD}
   management:
     api:
-      url: ${RABBITMQ_API_URL}
+      url: ${RABBITMQ_MANAGEMENT_URL}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
 
-# Production Security
+# Production security
 security:
   cors:
     allowed-origin: ${CORS_ALLOWED_ORIGIN}
     max-age-seconds: ${CORS_MAX_AGE:3600}
 
-# Production Logging
-logging:
-  level:
-    root: WARN
-    com.owmetagg: INFO
+# Production-specific settings
+overfast:
+  api:
+    rate-limit:
+      requests-per-second: ${OVERFAST_PROD_RATE_LIMIT:15}
