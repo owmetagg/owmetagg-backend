@@ -137,6 +137,11 @@ TESTING_GUIDE.md.bak
 test-results/
 coverage/
 
+# Troubleshooting scripts (keep local, don't commit)
+force-apply-indexes.sql
+FIX_INDEXES.md
+verify-indexes.sql
+
 # Docker volumes (if using local volumes)
 postgres-data/
 rabbitmq-data/
